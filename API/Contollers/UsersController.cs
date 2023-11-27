@@ -1,5 +1,9 @@
-﻿using API.Data;
+﻿using System.Security.Claims;
+using API.Data;
+using API.DTOs;
 using API.Entities;
+using API.Interfaces;
+using AutoMapper;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -8,28 +12,51 @@ namespace API.Controllers;
 
 public class UsersController : BaseApiController
 {
-    private readonly DataContext _context;
 
-    public UsersController(DataContext context)
-    {
-        _context = context;
-    }
-    [AllowAnonymous]
-    [HttpGet]
+   private readonly IUserRepository _userRepository;
+   private readonly IMapper _mapper;
 
-    public async Task<ActionResult<IEnumerable<AppUser>>> GetUsers()
-    {
-        var users = await _context.Users.ToListAsync();
+   public UsersController(IUserRepository userRepository, IMapper mapper)
+   {
+      _mapper = mapper;
+      _userRepository = userRepository;
 
-        return users;
-    }
+   }
+   [AllowAnonymous]
+   [HttpGet]
 
-    
-    [HttpGet("{id}")] // /api/users/2
+   public async Task<ActionResult<IEnumerable<AppUser>>> GetUsers()
+   {
+      var users = await _userRepository.GetMembersAsync();
 
-    public async Task<ActionResult<AppUser>> GetUser(int id)
-    {
-        return await _context.Users.FindAsync(id);
+      return Ok(users);
+
+
+   }
+
+
+   [HttpGet("{username}")]
+
+   public async Task<ActionResult<MemberDto>> GetUser(string username)
+   {
+      return await _userRepository.GetMemberAsync(username);
+
+   }
+
+   [HttpPut]
+   public async Task<ActionResult> UpdateUser(MemberUpdateDto memberUpdateDto)
+   {
+      var username = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+      var user = await _userRepository.GetUserByUsernameAsync(username);
+
+      if (user == null) return NotFound();
+
+      _mapper.Map(memberUpdateDto, user);
+
+      if(await _userRepository.SaveAllAsync()) return NoContent();
+
+      return BadRequest("Faled to update user");
+
     }
 
 }
